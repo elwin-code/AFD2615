@@ -1,0 +1,19 @@
+{
+  "name": "Fire Drone - Raspberry Pi 4B",
+  "image": "mcr.microsoft.com/devcontainers/python:3.11",
+  "features": {
+    "ghcr.io/devcontainers/features/python:1": {}
+  },
+  "postCreateCommand": "pip install --no-cache-dir smbus2 gpiozero numpy opencv-python pymavlink rplidar mlx90640",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "ms-toolsai.jupyter",
+        "github.copilot"
+      ]
+    }
+  },
+  "remoteUser": "root"
+}
