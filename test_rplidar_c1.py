@@ -1,90 +1,70 @@
 import time
 import serial
-import struct
-from collections import defaultdict
+from datetime import datetime
 
-print("🚀 RPLidar C1 - Slow & Readable Test")
-print("Motor is spinning → Showing one scan per second\n")
+print("🚀 RPLidar C1 - Reliable Test")
+print("Waiting for good scans...\n")
 
 PORT = '/dev/ttyUSB0'
 BAUDRATE = 460800
 
+ser = serial.Serial(PORT, BAUDRATE, timeout=2)
+
+# Start scan
+ser.write(b'\xA5\x20')
+time.sleep(2)
+
+scan_count = 0
+
 try:
-    ser = serial.Serial(PORT, BAUDRATE, timeout=1)
-    print("✅ Serial port opened successfully\n")
-
-    # Start scan
-    ser.write(b'\xA5\x20')
-    time.sleep(1.5)
-
-    print("📡 Starting scans... (Press Ctrl+C to stop)\n")
-    print("=" * 90)
-
-    scan_count = 0
-
     while True:
-        if ser.in_waiting >= 2000:          # Wait for a full-ish scan
+        if ser.in_waiting > 100:
             data = ser.read(ser.in_waiting)
             scan_count += 1
 
-            valid_points = 0
+            # Count how many valid distance measurements we can find
+            valid_count = 0
             distances = []
 
-            i = 0
-            while i < len(data) - 5:
+            for i in range(len(data) - 5):
+                # Look for valid measurement header (common in C1)
                 if data[i] == 0xAA and data[i+1] == 0x55:
                     try:
-                        angle_raw = struct.unpack('<H', data[i+2:i+4])[0]
-                        dist_raw  = struct.unpack('<H', data[i+4:i+6])[0]
+                        angle_raw = int.from_bytes(data[i+2:i+4], 'little')
+                        dist_raw = int.from_bytes(data[i+4:i+6], 'little')
 
                         angle = (angle_raw >> 1) / 64.0
                         distance = dist_raw / 4.0
 
-                        if distance > 0:
-                            valid_points += 1
-                            distances.append((angle, distance))
-                        i += 6
+                        if 0 < distance < 12000:   # Reasonable range for C1
+                            valid_count += 1
+                            distances.append(distance)
                     except:
-                        i += 1
+                        pass
+
+            # Print clean output
+            if valid_count > 5:
+                if distances:
+                    avg_dist = sum(distances) / len(distances)
+                    min_dist = min(distances)
+                    max_dist = max(distances)
+
+                    print(f"Scan #{scan_count:3d} | Valid Points: {valid_count:4d} | "
+                          f"Min: {min_dist:6.0f}mm | Avg: {avg_dist:6.0f}mm | Max: {max_dist:7.0f}mm")
                 else:
-                    i += 1
-
-            # === Print nicely formatted output ===
-            if distances:
-                dist_values = [d for _, d in distances]
-                min_dist = min(dist_values)
-                max_dist = max(dist_values)
-                avg_dist = sum(dist_values) / len(dist_values)
-
-                # Find approximate cardinal directions
-                front = min([d for a, d in distances if (a < 15 or a > 345)], default=0)
-                left  = min([d for a, d in distances if 75 < a < 105], default=0)
-                right = min([d for a, d in distances if 255 < a < 285], default=0)
-                back  = min([d for a, d in distances if 165 < a < 195], default=0)
-
-                print(f"Scan #{scan_count:3d} | Points: {valid_points:4d} | "
-                      f"Min: {min_dist:6.0f}mm | Avg: {avg_dist:6.0f}mm | Max: {max_dist:7.0f}mm")
-
-                print(f"   Front: {front:6.0f}mm | Left: {left:6.0f}mm | "
-                      f"Right: {right:6.0f}mm | Back: {back:6.0f}mm")
+                    print(f"Scan #{scan_count:3d} | Valid Points: {valid_count:4d}")
             else:
-                print(f"Scan #{scan_count:3d} → No valid points received")
+                print(f"Scan #{scan_count:3d} | Only {valid_count} valid points - waiting for better data...")
 
-            print("-" * 90)
-
-        # Slow down the loop so it's easy to read
-        time.sleep(1.0)
+            time.sleep(0.8)   # Slow and readable
 
 except KeyboardInterrupt:
-    print("\n\n🛑 Stopped by user.")
-
-except Exception as e:
-    print(f"❌ Error: {e}")
+    print("\n\nStopped by user.")
 
 finally:
     try:
-        ser.write(b'\xA5\x25')   # Stop scan command
+        ser.write(b'\xA5\x25')  # Stop scan
         ser.close()
-        print("✅ RPLidar stopped cleanly.")
+        print("RPLidar stopped.")
     except:
         pass
