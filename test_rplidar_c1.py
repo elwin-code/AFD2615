@@ -1,61 +1,60 @@
 import time
 import serial
 
-print("🚀 RPLidar C1 - Basic Reliable Test")
-print("This version reads raw data slowly for debugging\n")
+print("🚀 RPLidar C1 - Final Simple Parser")
+print("Reading raw data and attempting to extract distances...\n")
 
 PORT = '/dev/ttyUSB0'
 BAUDRATE = 460800
 
 try:
     ser = serial.Serial(PORT, BAUDRATE, timeout=1)
-    print("✅ Serial port opened")
+    print("✅ Serial opened")
 
-    # Start the scan
+    # Start scan
     ser.write(b'\xA5\x20')
     time.sleep(2)
 
-    print("📡 Reading raw data... (one update per second)\n")
-    print("=" * 80)
-
     scan_count = 0
+    print("📡 Starting scan... (one summary per second)\n")
+    print("=" * 85)
 
     while True:
         scan_count += 1
-        if ser.in_waiting > 0:
-            data = ser.read(min(ser.in_waiting, 4096))   # Read up to 4KB
-            byte_count = len(data)
+        if ser.in_waiting > 1000:
+            data = ser.read(ser.in_waiting)
 
-            print(f"Scan #{scan_count:3d} | Received {byte_count:4d} bytes")
+            # Count how many distance values we can extract (look for reasonable distances)
+            distances = []
+            for i in range(len(data) - 3):
+                # Look for possible distance bytes (simple heuristic for C1)
+                dist = int.from_bytes(data[i:i+2], 'little')
+                if 100 < dist < 12000:          # Reasonable range in mm
+                    distances.append(dist / 4.0)   # Convert to mm
 
-            # Count how many potential measurement packets we see
-            packet_count = 0
-            for i in range(len(data) - 1):
-                if data[i] == 0xAA and data[i+1] == 0x55:
-                    packet_count += 1
+            valid_count = len(distances)
 
-            print(f"   → Found {packet_count} potential measurement packets")
-
-            if byte_count > 1000:
-                print("   → Good data volume! Sensor is transmitting properly.")
-            elif byte_count > 100:
-                print("   → Partial data received.")
+            if valid_count > 50:
+                avg = sum(distances) / valid_count
+                min_d = min(distances)
+                max_d = max(distances)
+                print(f"Scan #{scan_count:3d} | Valid Points: {valid_count:4d} | "
+                      f"Min: {min_d:6.0f}mm | Avg: {avg:6.0f}mm | Max: {max_d:7.0f}mm")
             else:
-                print("   → Very little data.")
+                print(f"Scan #{scan_count:3d} | Only {valid_count} valid points - still waiting...")
 
-        else:
-            print(f"Scan #{scan_count:3d} | No data waiting...")
-
-        print("-" * 80)
-        time.sleep(1.0)   # Slow and easy to read
+        time.sleep(1.0)
 
 except KeyboardInterrupt:
-    print("\n\n🛑 Stopped by user.")
+    print("\n\nStopped by user.")
+
+except Exception as e:
+    print(f"Error: {e}")
 
 finally:
     try:
-        ser.write(b'\xA5\x25')  # Stop scan
+        ser.write(b'\xA5\x25')
         ser.close()
-        print("Port closed.")
+        print("RPLidar stopped.")
     except:
         pass
