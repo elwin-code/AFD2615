@@ -73,7 +73,7 @@ try:
             print()
 
             # Every 5 scans, show a quick summary of distances in 4 directions
-            if scan_count % 5 == 0:
+            if scan_count % 20 == 0:
                 print("   → Summary: Front ≈ {:.0f}mm | Left ≈ {:.0f}mm | Right ≈ {:.0f}mm | Back ≈ {:.0f}mm".format(
                     distances_by_angle[0][-1] if distances_by_angle[0] else 0,
                     distances_by_angle[90][-1] if distances_by_angle[90] else 0,
