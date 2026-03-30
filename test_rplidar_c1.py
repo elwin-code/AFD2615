@@ -1,49 +1,66 @@
 import time
-import numpy as np
 from rplidar import RPLidar
 
 print("🚀 Testing Slamtec RPLidar C1")
-print("Make sure the sensor is connected via USB adapter\n")
+print("Using baudrate 460800 (correct for C1)\n")
 
-# Change to /dev/ttyUSB0 if using USB adapter (most common)
-# Use /dev/serial0 if doing direct UART wiring
-PORT_NAME = '/dev/ttyUSB0'
+PORT_NAME = '/dev/ttyUSB0'   # Change to /dev/ttyACM0 if needed
 
 try:
-    lidar = RPLidar(PORT_NAME, baudrate=460800, timeout=3)   # C1 typically uses 460800
+    # Important: Use 460800 baud for RPLidar C1
+    lidar = RPLidar(PORT_NAME, baudrate=460800, timeout=3)
 
-    print("✅ RPLidar connected!")
-    print("Device Info:", lidar.get_info())
-    print("Health:", lidar.get_health())
+    print("✅ Connected to RPLidar C1!")
+    
+    # Get basic device info
+    info = lidar.get_info()
+    print("Device Info:", info)
 
-    print("\nStarting motor and scanning... (Press Ctrl+C to stop)\n")
+    health = lidar.get_health()
+    print("Health Status:", health)
 
-    for i, scan in enumerate(lidar.iter_scans(max_buf_meas=2000)):
-        print(f"Scan #{i+1} | Points: {len(scan)}")
+    print("\nStarting motor and scanning...")
+    print("Press Ctrl+C to stop\n")
 
-        # Show some statistics
-        distances = [distance for _, _, distance in scan if distance > 0]
+    scan_count = 0
+    for scan in lidar.iter_scans(max_buf_meas=3000, min_len=100):
+        scan_count += 1
+        distances = [d for _, _, d in scan if d > 0]
+
         if distances:
-            print(f"  → Closest: {min(distances):.1f} mm | Farthest: {max(distances):.1f} mm")
+            closest = min(distances)
+            farthest = max(distances)
+            num_points = len(scan)
+            
+            print(f"Scan #{scan_count:3d} | Points: {num_points:4d} | "
+                  f"Closest: {closest:6.1f} mm | Farthest: {farthest:7.1f} mm")
 
-        # Optional: Print first 10 measurements (angle, distance)
-        for _, angle, distance in list(scan)[:10]:
-            print(f"    Angle: {angle:6.1f}° → Distance: {distance:7.1f} mm")
+            # Show first 8 measurements for debugging
+            if scan_count <= 3:
+                print("   Sample angles/distances:")
+                for _, angle, dist in list(scan)[:8]:
+                    print(f"     {angle:6.1f}° → {dist:7.1f} mm")
+        else:
+            print(f"Scan #{scan_count} → No valid points")
 
-        print("-" * 70)
+        print("-" * 85)
 
-        if i > 20:   # Stop after 20 scans for testing
+        if scan_count >= 15:   # Stop after 15 scans for testing
             break
 
 except Exception as e:
     print(f"❌ Error: {e}")
-    print("Check connection and that /dev/ttyUSB0 exists (ls /dev/ttyUSB*)")
+    print("\nTroubleshooting tips:")
+    print("1. Run: ls /dev/ttyUSB*   to confirm the port")
+    print("2. Try: sudo chmod 666 /dev/ttyUSB0")
+    print("3. Make sure the USB adapter is firmly connected")
+    print("4. Try unplugging and replugging the lidar")
 
 finally:
     try:
         lidar.stop()
         lidar.stop_motor()
         lidar.disconnect()
-        print("RPLidar stopped cleanly.")
+        print("\nRPLidar stopped cleanly.")
     except:
         pass
