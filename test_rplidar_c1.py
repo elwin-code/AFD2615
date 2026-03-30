@@ -1,69 +1,51 @@
 import time
-from rplidar import RPLidar, RPLidarException
+import asyncio
+from rplidarc1 import RPLidar
 
-print("🚀 RPLidar C1 Test - Robust Version")
-print("Port: /dev/ttyUSB0 | Baudrate: 460800\n")
+print("🚀 RPLidar C1 Test using dedicated rplidarc1 library")
+print("Port: /dev/ttyUSB0\n")
 
-PORT = '/dev/ttyUSB0'
-
-try:
-    # Create lidar object with higher timeout and explicit settings
-    lidar = RPLidar(PORT, baudrate=460800, timeout=5)
-
-    print("✅ Connected to RPLidar C1")
-
-    # Get device information
-    info = lidar.get_info()
-    print(f"Device Info: {info}")
-
-    health = lidar.get_health()
-    print(f"Health: {health}")
-
-    print("\nStarting motor and scanning...")
-    print("Press Ctrl+C to stop\n")
-
-    scan_count = 0
-
-    for scan in lidar.iter_scans(max_buf_meas=4000, min_len=50):
-        scan_count += 1
-        
-        distances = [d for _, _, d in scan if d > 0]
-        
-        if distances:
-            closest = min(distances)
-            farthest = max(distances)
-            avg_dist = sum(distances) / len(distances)
-            
-            print(f"Scan #{scan_count:3d} | Points: {len(scan):4d} | "
-                  f"Closest: {closest:6.1f}mm | Avg: {avg_dist:6.1f}mm | "
-                  f"Farthest: {farthest:7.1f}mm")
-        else:
-            print(f"Scan #{scan_count} → No valid measurements")
-
-        # Force buffer clear every 5 scans (helps with C1)
-        if scan_count % 5 == 0:
-            try:
-                lidar.clear_input()
-            except:
-                pass
-
-        if scan_count >= 15:
-            break
-
-except RPLidarException as e:
-    print(f"❌ RPLidar Library Error: {e}")
-    print("This is common with C1. Trying recovery...")
-
-except Exception as e:
-    print(f"❌ Unexpected Error: {e}")
-
-finally:
+async def main():
     try:
-        lidar.stop()
-        lidar.stop_motor()
-        lidar.disconnect()
-        print("\nRPLidar stopped cleanly.")
-    except:
-        pass
+        # Create lidar object
+        lidar = RPLidar(port="/dev/ttyUSB0", baudrate=460800)
 
-print("Test finished.")
+        print("✅ Connected to RPLidar C1!")
+
+        # Get device info
+        info = await lidar.get_info()
+        print(f"Device Info: {info}")
+
+        health = await lidar.get_health()
+        print(f"Health: {health}")
+
+        print("\nStarting continuous scan... (Press Ctrl+C to stop)\n")
+
+        scan_count = 0
+        async for scan in lidar.iter_scans():
+            scan_count += 1
+            distances = [d for _, _, d in scan if d > 0]
+
+            if distances:
+                closest = min(distances)
+                farthest = max(distances)
+                print(f"Scan #{scan_count:3d} | Points: {len(scan):4d} | "
+                      f"Closest: {closest:6.1f} mm | Farthest: {farthest:7.1f} mm")
+            else:
+                print(f"Scan #{scan_count} → No valid points")
+
+            if scan_count >= 20:   # Stop after 20 scans for testing
+                break
+
+    except Exception as e:
+        print(f"❌ Error: {e}")
+
+    finally:
+        try:
+            await lidar.stop()
+            print("\nRPLidar stopped cleanly.")
+        except:
+            pass
+
+if __name__ == "__main__":
+    asyncio.run(main())
