@@ -64,7 +64,7 @@ try:
                     i += 1
 
             # Print nice summary
-            print(f"Scan #{scan_count:3d} | Valid Points: {valid_points:4d} | "
+            print(f"    Scan #{scan_count:3d} | Valid Points: {valid_points:4d} | "
                   f"Min: {min_dist:6.0f}mm | Max: {max_dist:7.0f}mm", end="")
 
             if front_dist:
@@ -74,7 +74,7 @@ try:
 
             # Every 5 scans, show a quick summary of distances in 4 directions
             if scan_count % 20 == 0:
-                print("   → Summary: Front ≈ {:.0f}mm | Left ≈ {:.0f}mm | Right ≈ {:.0f}mm | Back ≈ {:.0f}mm".format(
+                print("→Summary: Front ≈ {:.0f}mm | Left ≈ {:.0f}mm | Right ≈ {:.0f}mm | Back ≈ {:.0f}mm".format(
                     distances_by_angle[0][-1] if distances_by_angle[0] else 0,
                     distances_by_angle[90][-1] if distances_by_angle[90] else 0,
                     distances_by_angle[270][-1] if distances_by_angle[270] else 0,
