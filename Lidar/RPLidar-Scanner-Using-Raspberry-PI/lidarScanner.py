@@ -53,43 +53,36 @@ def radar_with_circles_and_colors():
             if MIN_DISTANCE <= scan.distance <= MAX_DISTANCE:
                 points.append((scan.angle, scan.distance))
 
-            # Detect sweep completion (new 360 scan)
-            if prev_angle is not None and (scan.angle < 5 and prev_angle is not None):
-            
-                print("\n===== NEW 360 SCAN =====")
-                print(f"Points in scan: {len(points)}")
-            
-                for ang, dist in points:
-                    print(f"Angle: {ang:.2f}°, Distance: {dist} mm")
-            
-                print("========================\n")
-            
+            # Detect sweep completion
+            if prev_angle is not None and scan.angle < prev_angle:
                 # Clear screen
                 screen.fill(BLACK)
-            
+
                 # Draw reference circles + labels
-                for r in range(500, MAX_DISTANCE + 1, 500):
+                for r in range(500, MAX_DISTANCE + 1, 500):  # every 50 cm
                     pygame.draw.circle(screen, DARK_GREEN, CENTER, int(r * SCALE), 1)
-                    label = font_small.render(f"{r//10} cm", True, WHITE)
+                    label = font_small.render(f"{r//10} cm", True, WHITE)  # mm → cm
                     screen.blit(label, (CENTER[0] + int(r * SCALE) - 25, CENTER[1]))
-            
-                # Draw points
+
+                # Draw all points with distance-based colors
                 for ang, dist in points:
                     px, py = polar_to_cartesian(ang, dist)
-            
-                    if dist <= 1000:
+                    if dist <= 1000:       # 0.05–1.0 m
                         color = RED
-                    elif dist <= 2000:
+                    elif dist <= 2000:     # 1.0–2.0 m
                         color = YELLOW
-                    else:
+                    else:                  # 2.0–3.0 m
                         color = GREEN
-            
                     pygame.draw.circle(screen, color, (px, py), 2)
-            
+
+                # Draw title text at bottom
+                title_surface = font_title.render("Sparklers Lidar Radar System", True, WHITE)
+                screen.blit(title_surface, (WIDTH // 2 - title_surface.get_width() // 2, HEIGHT - 40))
+
                 pygame.display.flip()
                 clock.tick(60)
-            
                 points.clear()
+
             prev_angle = scan.angle
 
             if not running:
