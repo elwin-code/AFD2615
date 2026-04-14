@@ -55,6 +55,15 @@ def radar_with_circles_and_colors():
 
             # Detect sweep completion
             if prev_angle is not None and scan.angle < prev_angle:
+
+                print("\n===== NEW 360 SCAN =====")
+                print(f"Points in scan: {len(points)}")
+            
+                for ang, dist in points:
+                    print(f"Angle: {ang:.2f}°, Distance: {dist} mm")
+            
+                print("========================\n")
+
                 # Clear screen
                 screen.fill(BLACK)
 
