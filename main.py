@@ -1,77 +1,88 @@
+#!/usr/bin/env python3
 import time
 import numpy as np
 from gpiozero import OutputDevice
+from pymavlink import mavutil
 import mlx90640
 from mlx90640 import MLX90640, ChessMode
 import rplidar
-import pymavlink
 
 # ================== CONFIG ==================
 RELAY_PIN = 17
-REFRESH_RATE_HZ = 4
+BAUDRATE = 921600          # Changed to faster rate
+SCAN_ALTITUDE = 15         # meters
+FIRE_TEMP_THRESHOLD = 80   # °C
 
-# ================== INITIALIZE ==================
-print("🚀 Initializing Fire Drone System...")
+# ================== INIT ==================
+print("🚁 Initializing Autonomous Fire Drone...")
 
-# GPIO Relay for retardant drop
 relay = OutputDevice(RELAY_PIN, active_high=True, initial_value=False)
 
-# MLX90640 Thermal Camera (follows datasheet measurement flow)
-thermal_sensor = MLX90640(bus=1, address=0x33, mode=ChessMode)
-thermal_sensor.refresh_rate = REFRESH_RATE_HZ
+# Thermal Camera
+thermal = MLX90640(bus=1, address=0x33, mode=ChessMode)
+thermal.refresh_rate = 4
 
-# RPLIDAR (example)
+# LIDAR
 lidar = rplidar.RPLidar('/dev/ttyUSB0')
 
-# Pixhawk MAVLink (example - adjust serial port)
-mav = pymavlink.MAVLinkConnection('/dev/serial0', baud=57600)
+# Pixhawk MAVLink
+print("Connecting to Pixhawk...")
+master = mavutil.mavlink_connection('/dev/serial0', baud=BAUDRATE)
+master.wait_heartbeat()
+print("✅ Connected to Pixhawk")
 
-print("✅ All sensors initialized")
+# Switch to GUIDED mode
+master.mav.set_mode_send(master.target_system,
+                         mavutil.mavlink.MAV_MODE_FLAG_CUSTOM_MODE_ENABLED,
+                         4)  # 4 = GUIDED in PX4
 
-# ================== YOUR FUNCTIONS (from your flowchart) ==================
-def initialize_sensors():
-    # Already done above - EEPROM is restored automatically by the library
-    pass
+print("Switched to GUIDED mode")
 
-def read_thermal_camera():
-    frame = thermal_sensor.get_frame()           # 24x32 np.array of °C
-    ta = thermal_sensor.get_ambient_temp()
-    return frame, ta
+def send_position_setpoint(x, y, z, yaw=0):
+    """Send position command to Pixhawk"""
+    master.mav.set_position_target_local_ned_send(
+        0, master.target_system, master.target_component,
+        mavutil.mavlink.MAV_FRAME_LOCAL_NED,
+        0b110111111000,  # position only
+        x, y, -z,        # NED coordinates (z is down)
+        0, 0, 0,         # velocity
+        0, 0, 0,         # acceleration
+        yaw, 0)
 
-def detect_fire(thermal_grid, ta):
-    max_temp = np.max(thermal_grid)
-    hot_row, hot_col = np.unravel_index(np.argmax(thermal_grid), thermal_grid.shape)
-    fire_detected = max_temp > 80  # Example threshold
-    confidence = (max_temp - 60) / 100 if max_temp > 60 else 0
-    return fire_detected, (hot_row, hot_col), max_temp, confidence
-
-def trigger_retardant_drop(duration_sec=3):
-    print("🔥 DROPPING RETARDANT!")
-    relay.on()
-    time.sleep(duration_sec)
-    relay.off()
-    print("✅ Drop complete")
-
-# ================== MAIN CONTROL LOOP ==================
-def main_control_loop():
-    print("🔄 Starting main control loop...")
+# ================== MAIN LOOP ==================
+def main():
+    print("Starting Fire Scan Mission...")
+    
     while True:
-        # 1. Read sensors
-        thermal_grid, ta = read_thermal_camera()
-        # lidar_scan = ... (add your lidar code here)
+        # Read sensors
+        frame, ta = thermal.get_frame(), thermal.get_ambient_temp()
+        max_temp = np.max(frame)
+        hot_idx = np.unravel_index(np.argmax(frame), frame.shape)
+        
+        # Simple fire detection
+        fire_detected = max_temp > FIRE_TEMP_THRESHOLD
+        
+        print(f"Scan | Ta={ta:.1f}°C | Max={max_temp:.1f}°C | Fire={fire_detected}")
 
-        # 2. Fire detection
-        fire_detected, hotspot, max_temp, confidence = detect_fire(thermal_grid, ta)
+        if fire_detected:
+            print(f"🔥 FIRE DETECTED at {hot_idx} !")
+            # TODO: Fly toward hotspot (you can improve this with GPS + heading)
+            trigger_retardant_drop()
+        
+        # Basic obstacle avoidance using LIDAR (add your logic here)
+        # For now we just keep scanning
+        
+        time.sleep(0.25)  # 4 Hz loop
 
-        if fire_detected and confidence > 0.7:
-            print(f"🔥 FIRE DETECTED! Max temp: {max_temp:.1f}°C")
-            trigger_retardant_drop(3)
-            # Send new waypoint to Pixhawk here
-        else:
-            print(f"Scanning... Ta={ta:.1f}°C  Max={np.max(thermal_grid):.1f}°C")
-
-        time.sleep(1 / REFRESH_RATE_HZ)
+def trigger_retardant_drop(duration=3):
+    print("💧 DROPPING RETARDANT!")
+    relay.on()
+    time.sleep(duration)
+    relay.off()
 
 if __name__ == "__main__":
-    initialize_sensors()
-    main_control_loop()
+    try:
+        main()
+    except KeyboardInterrupt:
+        print("\nMission aborted - disarming")
+        relay.off()
