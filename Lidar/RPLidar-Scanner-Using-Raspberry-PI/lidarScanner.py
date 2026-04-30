@@ -6,8 +6,8 @@ from pyrplidar import PyRPlidar
 # Screen setup
 WIDTH, HEIGHT = 800, 800
 CENTER = (WIDTH // 2, HEIGHT // 2)
-MIN_DISTANCE = 50     # mm (5 cm)
-MAX_DISTANCE = 3000   # mm (300 cm)
+MIN_DISTANCE = 100     # mm (5 cm)
+MAX_DISTANCE = 10000   # mm (300 cm)
 SCALE = (WIDTH // 2) / MAX_DISTANCE
 
 # Colors
